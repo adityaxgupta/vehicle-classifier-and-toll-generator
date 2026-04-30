@@ -1,10 +1,12 @@
+import os
+os.system("pip uninstall -y opencv-python")
+
 import streamlit as st
 import tensorflow as tf
 from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
-import os
 
 from config import CLASS_NAMES, TRUCK_CLASSES, BASE_TOLL_RATES, AXLE_RATE
 
