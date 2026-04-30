@@ -8,4 +8,5 @@
 * Original annotated truck axle dataset - [Universidade de São Paulo (USP)](https://zenodo.org/records/17128113)  
 * YOLO-compatible dataset created for Axle Detection and Counting - [kaggle](https://www.kaggle.com/datasets/oipizdexxc/truck-axle-detection-dataset/data)  
 # Model
+* RT-DETR trained for axle detection - [huggingface](https://huggingface.co/bismuthantimony/vehicle-axle-detection-rtdetr)
 * YOLOv10s retrained for axle detection - [huggingface](https://huggingface.co/oipi/axle-detection-and-counting)
