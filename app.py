@@ -1,15 +1,29 @@
 import os
-# Force CPU execution & suppress verbose C++ logs
+
+# --- CRITICAL MEMORY & THREADING FIXES ---
+# Must be executed before importing PyTorch or TensorFlow
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2" 
+
+# Prevent OpenMP/BLAS memory collisions between PyTorch and TensorFlow
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+# Forces the OS to ignore duplicate OpenMP libraries
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# -----------------------------------------
 
 import gc
 import torch
 import streamlit as st
-import tensorflow as tf
-from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
+
+# Import Ultralytics BEFORE TensorFlow to establish library hierarchy
+from ultralytics import YOLO
+import tensorflow as tf
 
 from config import CLASS_NAMES, TRUCK_CLASSES, BASE_TOLL_RATES, AXLE_RATE
 
@@ -91,9 +105,19 @@ def preprocess_image(image, model_name):
 # MAIN APP
 st.title("Vehicle Classifier, Axle Counter & Toll Calculator")
 
-# Sidebar
+# Sidebar Memory Clearing Mechanism
+if 'last_clf' not in st.session_state:
+    st.session_state.last_clf = None
+if 'last_axle' not in st.session_state:
+    st.session_state.last_axle = None
+
 with st.sidebar:
     st.header("Model Settings")
+    
+    if st.button("Emergency Memory Reset (Use if stuck)"):
+        st.cache_resource.clear()
+        gc.collect()
+        st.success("Memory cleared!")
 
     st.markdown("""
     **Recommended Models:**
@@ -106,8 +130,12 @@ with st.sidebar:
     axle_model_name = st.selectbox("Axle Detection Model", ["RT-DETR-Large", "YOLOv10s", "YOLOv8n"])
     conf_threshold = st.slider("Axle Detection Confidence", 0.1, 1.0, 0.30)
     
-    if axle_model_name == "RT-DETR-Large":
-        st.info("RT-DETR Selected: higher accuracy mode.")
+    # Smart Cache Eviction
+    if clf_model_name != st.session_state.last_clf or axle_model_name != st.session_state.last_axle:
+        st.cache_resource.clear()
+        gc.collect()
+        st.session_state.last_clf = clf_model_name
+        st.session_state.last_axle = axle_model_name
 
     st.divider()
     st.info("Please upload a clear picture with visible wheels.")
