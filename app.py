@@ -4,8 +4,8 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import gc
 import torch
 import streamlit as st
-import tensorflow as tf
 from ultralytics import YOLO
+import tensorflow as tf
 from PIL import Image, ImageOps
 import numpy as np
 
