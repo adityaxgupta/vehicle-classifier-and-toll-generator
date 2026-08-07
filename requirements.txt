@@ -3,4 +3,3 @@ tensorflow-cpu
 ultralytics
 pillow
 numpy
-opencv-python-headless==4.5.4.60
