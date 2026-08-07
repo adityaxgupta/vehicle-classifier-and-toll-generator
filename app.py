@@ -1,11 +1,13 @@
 import os
+# Force CPU execution & suppress verbose C++ logs
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
 import gc
 import torch
 import streamlit as st
-from ultralytics import YOLO
 import tensorflow as tf
+from ultralytics import YOLO
 from PIL import Image, ImageOps
 import numpy as np
 
@@ -89,28 +91,27 @@ def preprocess_image(image, model_name):
 # MAIN APP
 st.title("Vehicle Classifier, Axle Counter & Toll Calculator")
 
-if 'last_clf' not in st.session_state:
-    st.session_state.last_clf = None
-if 'last_axle' not in st.session_state:
-    st.session_state.last_axle = None
-
+# Sidebar
 with st.sidebar:
     st.header("Model Settings")
-    
-    if st.button("Emergency Memory Reset (Use if stuck)"):
-        st.cache_resource.clear()
-        gc.collect()
-        st.success("Memory cleared!")
+
+    st.markdown("""
+    **Recommended Models:**
+    * Classification: **CNN (Custom)**
+    * Axle Detection: **RT-DETR-Large**
+    """)
+    st.divider()
 
     clf_model_name = st.selectbox("Classification Model", ["CNN (Custom)", "MobileNetV2"])
     axle_model_name = st.selectbox("Axle Detection Model", ["RT-DETR-Large", "YOLOv10s", "YOLOv8n"])
     conf_threshold = st.slider("Axle Detection Confidence", 0.1, 1.0, 0.30)
     
-    if clf_model_name != st.session_state.last_clf or axle_model_name != st.session_state.last_axle:
-        st.cache_resource.clear()
-        gc.collect()
-        st.session_state.last_clf = clf_model_name
-        st.session_state.last_axle = axle_model_name
+    if axle_model_name == "RT-DETR-Large":
+        st.info("RT-DETR Selected: higher accuracy mode.")
+
+    st.divider()
+    st.info("Please upload a clear picture with visible wheels.")
+    st.warning("Prediction results may not be accurate.")
 
 # File Uploader
 uploaded_file = st.file_uploader("Choose a vehicle image...", type=["jpg", "jpeg", "png"])
@@ -126,12 +127,11 @@ if uploaded_file is not None:
     if st.button("Calculate Toll", type="primary"):
         with st.spinner("Processing image..."):
             
-            # classify
+            # 1. Classification Phase
             clf_model = load_classification_model(clf_model_name)
             
             if clf_model:
                 processed_img = preprocess_image(original_image, clf_model_name)
-                
                 predictions = clf_model.predict(processed_img, verbose=0)
                 score = tf.nn.softmax(predictions[0])
                 class_idx = np.argmax(predictions[0])
@@ -147,16 +147,21 @@ if uploaded_file is not None:
                     st.caption(f"Confidence: {confidence:.2f}%")
                     st.metric("Base Toll", f"₹{base_toll}")
 
-                # detect axle
                 total_toll = base_toll
                 
+                # 2. Heavy Vehicle Detection Phase
                 if predicted_class in TRUCK_CLASSES:
                     st.divider()
                     st.write(f"**Heavy Vehicle Detected** - Counting Axles with {axle_model_name}...")
                     
+                    # Clear Keras session to free RAM before loading PyTorch model
+                    tf.keras.backend.clear_session()
+                    gc.collect()
+                    
                     axle_model = load_axle_model(axle_model_name)
                     
                     if axle_model:
+                        # Prevent PyTorch gradient tracking from filling RAM
                         with torch.no_grad():
                             results = axle_model.predict(original_image, conf=conf_threshold, verbose=False)
                             result = results[0]
@@ -167,7 +172,7 @@ if uploaded_file is not None:
                                 axle_count += 1
                         
                         annotated_array = result.plot(line_width=2, font_size=10)
-                        annotated_pil = Image.fromarray(annotated_array[..., ::-1]) 
+                        annotated_pil = Image.fromarray(annotated_array[..., ::-1])
                         
                         st.image(annotated_pil, caption=f"Axle Detection ({axle_model_name})", use_container_width=True)
                         
@@ -176,9 +181,9 @@ if uploaded_file is not None:
                         
                         st.info(f"Axles Detected: {axle_count} | Extra Charge: ₹{axle_cost}")
                         
+                        # Clean up local prediction arrays from RAM
                         del results, result, annotated_array, annotated_pil
                         gc.collect()
-                        
                     else:
                         st.error("Failed to load axle model.")
                 else:
